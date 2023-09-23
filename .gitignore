@@ -5,8 +5,7 @@ examples/
 
 secret_key.json
 
-dummy_skeletons.json
-dummy.mp4
+experiements/
 
 # Created by https://www.toptal.com/developers/gitignore/api/python
 # Edit at https://www.toptal.com/developers/gitignore?templates=python
