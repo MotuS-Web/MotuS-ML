@@ -375,8 +375,10 @@ class Metrics:
         y_pred = self.__video_normalize(y_pred, pred_video_height, pred_video_width, true_cut_point)
 
         y_true_values, y_pred_values = [], []
-        for key in y_true.keys():
-            y_true_value, y_pred_value = y_true[key], y_pred[key]
+        for key in y_pred.keys():
+            print(f"[INFO/METRICS] Key: {key}")
+            y_true_value = y_true[key]
+            y_pred_value = y_pred[key]
             y_true_values.extend(y_true_value)
             y_pred_values.extend(y_pred_value)
 

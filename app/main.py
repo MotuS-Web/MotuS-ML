@@ -19,7 +19,7 @@ DUMMY_VIDEO_FILE_NAME = "dummy.webm"
 EXTRACTOR_THRESHOLD = 0.85
 
 app = FastAPI()
-extractor = SkeletonExtractor(pretrained_bool=True, number_of_keypoints=17, device='cpu')
+extractor = SkeletonExtractor(pretrained_bool=True, number_of_keypoints=17, device='mps')
 preprocessor = DataPreprocessing()
 metrics = Metrics()
 
@@ -93,7 +93,7 @@ async def getMetricsConsumer(
 
     Returns:
         float or dobuble: The metrics between the consumer's skeleton and the guide's skeleton."""
-    testing_flag = False
+    testing_flag = True
     print(f"[INFO/GETMETRICS] Video get metrics request has been received.")
     print(f"[INFO/GETMETRICS] VNO: {vno}")
     
@@ -107,15 +107,18 @@ async def getMetricsConsumer(
         print(f"[INFO/GETMETRICS] Database query: {query}")
         print(f"[INFO/GETMETRICS] Database result: {result}")
 
-        if result.shape[0] == 0:    return {"error": "No query found in database."}
+        # if result.shape[0] == 0:    return {"error": "No query found in database."}
 
         # Check if the video number is in the database. 
         vno_list = result[:, 0].tolist()
-        if not vno in vno_list:     return {"error": "No video number found in database."}
         vno = vno_list.index(vno)
 
-        json_url = result[vno, 7]
+        json_url = result[vno, 6]
+        print(f"[INFO/GETMETRICS] JSON URL: {json_url}")
+
         response = requests.get(json_url)
+        print(f"[INFO/GETMETRICS] Response: {response.text}")
+
         guide_skeleton = json.loads(response.text)['skeletons']
 
         # Below code will be also used in the database query.
@@ -125,13 +128,14 @@ async def getMetricsConsumer(
 
         guide_video_height = json.loads(response.text)['video_heigth']
         guide_video_width = json.loads(response.text)['video_width']
-        video_cut_point = result[vno, 8]
+        video_cut_point = json.loads(response.text)['video_length']
     
     else:
         with open("extracted_skeleton.json", "r") as f:
             guide_skeleton = json.load(f)
         guide_video_width, guide_video_height = guide_skeleton['video_width'], guide_skeleton['video_heigth']
         video_lenght = guide_skeleton['video_length']
+        guide_skeleton = guide_skeleton['skeletons']
 
         video_tensor, video_height, video_width = preprocessor.processing(video_file, temp_video_file_path=DUMMY_VIDEO_FILE_NAME)
         video_cut_point = video_lenght
@@ -144,6 +148,9 @@ async def getMetricsConsumer(
     if video_cut_point >= frame_count:  video_cut_point = frame_count
     logging.info(f"[INFO/GETMETRICS] Video cut point: {video_cut_point}")
     
+    print(f"[INFO/GETMETRICS] y_true skeletons keys: {guide_skeleton.keys()}")
+    print(f"[INFO/GETMETRICS] y_pred skeletons keys: {skeletons.keys()}")
+
     # Calculate metrics 
     score = metrics.score(
         y_true=guide_skeleton,
