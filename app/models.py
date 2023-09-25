@@ -351,6 +351,7 @@ class Metrics:
         y_true, y_pred = np.array(y_true), np.array(y_pred)
         
         metrics = np.sum((y_true - y_pred) ** 2) / np.sum((y_true - y_true.mean()) ** 2)
+        metrics = 1 - metrics
         return metrics
 
     def score(self, 
@@ -370,19 +371,19 @@ class Metrics:
 
         Returns:
             float: The score of the two arrays.""" 
-        
-        y_true = self.__video_normalize(y_true, true_video_height, true_video_width, true_cut_point)
+        _true = self.__video_normalize(y_true, true_video_height, true_video_width, true_cut_point)
         y_pred = self.__video_normalize(y_pred, pred_video_height, pred_video_width, true_cut_point)
 
-        y_true_values, y_pred_values = [], []
+        each_scores =[]
         for key in y_pred.keys():
             print(f"[INFO/METRICS] Key: {key}")
             y_true_value = y_true[key]
             y_pred_value = y_pred[key]
-            y_true_values.extend(y_true_value)
-            y_pred_values.extend(y_pred_value)
 
-        jaccard_score = self.__jaccard_score(y_true_values, y_pred_values)
-        score = jaccard_score
+            score = self.__jaccard_score(y_true_value, y_pred_value)
+            # score = self.__normalized_mean_squared_error(y_true_value, y_pred_value)
+            each_scores.append(score)
+
+        score = np.mean(each_scores)
 
         return score

@@ -19,7 +19,7 @@ DUMMY_VIDEO_FILE_NAME = "dummy.webm"
 EXTRACTOR_THRESHOLD = 0.85
 
 app = FastAPI()
-extractor = SkeletonExtractor(pretrained_bool=True, number_of_keypoints=17, device='mps')
+extractor = SkeletonExtractor(pretrained_bool=True, number_of_keypoints=17, device='cpu')
 preprocessor = DataPreprocessing()
 metrics = Metrics()
 
@@ -93,7 +93,7 @@ async def getMetricsConsumer(
 
     Returns:
         float or dobuble: The metrics between the consumer's skeleton and the guide's skeleton."""
-    testing_flag = True
+    testing_flag = False
     print(f"[INFO/GETMETRICS] Video get metrics request has been received.")
     print(f"[INFO/GETMETRICS] VNO: {vno}")
     
@@ -110,15 +110,13 @@ async def getMetricsConsumer(
         # if result.shape[0] == 0:    return {"error": "No query found in database."}
 
         # Check if the video number is in the database. 
-        vno_list = result[:, 0].tolist()
+        vno_list = result[:, 0].tolist() 
         vno = vno_list.index(vno)
 
         json_url = result[vno, 6]
         print(f"[INFO/GETMETRICS] JSON URL: {json_url}")
 
         response = requests.get(json_url)
-        print(f"[INFO/GETMETRICS] Response: {response.text}")
-
         guide_skeleton = json.loads(response.text)['skeletons']
 
         # Below code will be also used in the database query.
