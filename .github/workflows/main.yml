@@ -46,7 +46,6 @@ jobs:
                     key: ${{ secrets.KEY }}
                     port: ${{ secrets.PORT }}
                     script: |
-                        docker pull ${{ secrets.DOCKERHUB_USERNAME }}/python-ci:latest
-                        docker run -d -p 5000:5000 ${{ secrets.DOCKERHUB_USERNAME }}/python-ci:latest
+                        docker pull ${{ secrets.DOCKERHUB_USERNAME }}/motus_ml:latest
+                        docker run -d -p 8000:8000 ${{ secrets.DOCKERHUB_USERNAME }}/motus_ml:latest
 
-                        
