@@ -49,3 +49,11 @@ jobs:
                         docker pull ${{ secrets.DOCKERHUB_USERNAME }}/motus_ml:latest
                         docker run -d -p 8000:8000 ${{ secrets.DOCKERHUB_USERNAME }}/motus_ml:latest
 
+
+            - 
+                name: 테스트 실패 시, 실패한 코드 라인에 Check 코멘트를 등록합니다
+                uses: mikepenz/action-junit-report@v3
+                if: always()
+                with:
+                    report_paths: '**/build/test-results/test/TEST-*.xml'
+                    token: ${{ github.GHT_TOKEN }}
