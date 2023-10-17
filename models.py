@@ -3,11 +3,13 @@ from tqdm import tqdm
 import torchvision.models as models
 import skvideo.io as skvideo
 import numpy as np
-import torch
 import time
 import cv2
 
-from . import utils
+import torch.nn as nn
+import torch
+
+import utils
 
 from sklearn.metrics import jaccard_score
 
@@ -58,7 +60,7 @@ class SkeletonExtractor:
             progress=False
         ).to(self.device).eval()
 
-    def __bounding_box(self, video_tensor: np.ndarray, score_threshold: float = 0.9) -> list:
+    def __bounding_box(self, video_tensor: torch.Tensor, score_threshold: float = 0.9) -> torch.Tensor:
         """Returns the bounding box of the video.
         The bounding box is calculated as follows:
             bounding_box = (x1, y1, x2, y2)
@@ -69,9 +71,8 @@ class SkeletonExtractor:
 
         Returns:
             list: The bounding box of the video."""
-        video_tensor = torch.from_numpy(
-            video_tensor / 255.0
-        ).permute(2, 0, 1).unsqueeze(0).float().to(self.device)
+        video_tensor = torch.from_numpy(video_tensor).permute(2, 0, 1).unsqueeze(0).float().to(self.device)
+        video_tensor = video_tensor / 255.0
 
         with torch.no_grad():
             outputs = self.bounding_box_model(video_tensor)
@@ -91,13 +92,13 @@ class SkeletonExtractor:
                 cropped_image = cropped_image.permute(1, 2, 0).cpu().numpy()
                 break
 
-        cropped_image = cv2.resize(cropped_image, (512, 1024))
+        cropped_image = cv2.resize(cropped_image, (256, 512))
         cropped_image = torch.Tensor(cropped_image).permute(2, 0, 1)
         cropped_image = cropped_image.unsqueeze(0).float().to(self.device)
 
         return cropped_image
    
-    def extract(self, video_tensor: cv2.VideoCapture, score_threshold: float = 0.93, video_length: float = None) -> dict:
+    def extract(self, video_tensor: cv2.VideoCapture, score_threshold: float = 0.93, video_length: float = 0.0) -> tuple:
         """Extracts skeletons from a video using the model loaded onto the device specified in the constructor.
 
         Args:
@@ -118,6 +119,7 @@ class SkeletonExtractor:
 
         total_fps, frame_count = 0., 0.
         extracted_skeletons = self.__extract_keypoint_mapping({})
+        extracted_skeletons_cropped = self.__extract_keypoint_mapping({})
         pbar = tqdm(desc=f"Extracting skeletons from video", total=video_length, unit="frames")
 
         while True:
@@ -135,19 +137,20 @@ class SkeletonExtractor:
             start_time = time.time()
             with torch.no_grad():
                 cropped_human = self.__bounding_box(frame, score_threshold=score_threshold)
-                outputs = self.model(cropped_human)
+
+                cropped_output = self.model(cropped_human)
+                outputs = self.model(frame_from_video)
             inference_time = time.time() - start_time
 
-            # Gets the keypoints from the outputs
-            cropped_human = cropped_human.squeeze(0).permute(1, 2, 0).cpu().numpy()
-
             keypoints = utils.get_keypoints(outputs, None, threshold=score_threshold)
-            output_image = utils.draw_keypoints(outputs, cropped_human)
+            keypoints_cropped = utils.get_keypoints(cropped_output, None, threshold=score_threshold)
 
             try:
                 extracted_skeletons = self.__add_keypoints(keypoints, extracted_skeletons)
+                extracted_skeletons_cropped = self.__add_keypoints(keypoints_cropped, extracted_skeletons_cropped)
             except:
                 extracted_skeletons = self.__add_none_keypoints(extracted_skeletons)
+                extracted_skeletons_cropped = self.__add_none_keypoints(extracted_skeletons_cropped)
             
             fps = 1.0 / inference_time
             total_fps += fps
@@ -156,12 +159,9 @@ class SkeletonExtractor:
             pbar.set_postfix({"FPS": f"{fps:.2f}", "Average FPS": f"{total_fps / frame_count:.2f}"})
             pbar.update(1)
 
-            if cv2.waitKey(1) & 0xFF == ord('q'): break
-
         pbar.close()
-        cv2.destroyAllWindows()
 
-        return extracted_skeletons, frame_count
+        return extracted_skeletons, extracted_skeletons_cropped, frame_count
 
     def __add_none_keypoints(self, input_mapping: dict) -> dict:
         """Adds None keypoints to the input mapping.
@@ -176,7 +176,7 @@ class SkeletonExtractor:
             input_mapping[self.__return_keypoint_name_from_index(idx)].append((0, 0))
         return input_mapping
 
-    def __add_keypoints(self, keypoints: list, input_mapping: dict) -> dict:
+    def __add_keypoints(self, keypoints, input_mapping):
         """Adds the keypoints to the input mapping.
         Keypoints are indexed from 0 to 16. The index number corresponds to the index of the keypoint in the list of keypoints.
         
@@ -299,6 +299,35 @@ class DataPreprocessing:
 
         return video, video_height, video_width
 
+class MetricsModel(nn.Module):
+    def __init__(self):
+        super(MetricsModel, self).__init__()
+        self.guide_points_skeleton = nn.Linear(34, 128)
+        self.consumer_points_skeleton = nn.Linear(34, 128)
+
+        self.hidden_1 = nn.Linear(256, 256)
+        self.hidden_2 = nn.Linear(256, 128)
+
+        self.score = nn.Sequential(
+            nn.Linear(128, 32),
+            nn.Linear(32, 1)
+        )
+
+        self.relu = nn.ReLU()
+        self.sigmoid = nn.Sigmoid()
+
+    def forward(self, guide_X, user_X):
+        guide_X = self.relu(self.guide_points_skeleton(guide_X))
+        user_X = self.relu(self.consumer_points_skeleton(user_X))
+
+        x = torch.cat((guide_X, user_X), dim=1)
+        x = self.relu(self.hidden_1(x))
+        x = self.relu(self.hidden_2(x))
+        
+        x = self.sigmoid(self.score(x))
+
+        return x
+
 class Metrics:
     def __video_normalize(self, skeleton: dict, video_height: int, video_width: int, cut_point: int):
         """Normalizes the skeleton to the video height and width.
@@ -323,7 +352,8 @@ class Metrics:
 
         return skeleton
 
-    def __jaccard_score(self, y_true: list, y_pred: list) -> float:
+    def __jaccard_score(self, 
+                        y_true, y_pred) -> float:
         """Returns the jaccard score of the two arrays.
         The jaccard score is calculated as follows:
             jaccard_score = (y_true & y_pred).sum() / (y_true | y_pred).sum()
@@ -334,10 +364,29 @@ class Metrics:
 
         Returns:
             float: The jaccard score of the two arrays."""
+        y_true, y_pred = np.array(y_true), np.array(y_pred)        
         metrics = np.sum(np.min([y_true, y_pred], axis=0)) / np.sum(np.max([y_true, y_pred], axis=0))
+        metrics = float(metrics)
+
         return metrics
 
-    def __normalized_mean_squared_error(self, y_true: list, y_pred: list) -> float:
+    def __linear_model(self, 
+                       y_true: torch.Tensor, 
+                       y_pred: torch.Tensor) -> float:
+        model = MetricsModel()
+        model.load_state_dict(
+            torch.load("model.pth", 
+                       map_location=torch.device('cpu')
+        ))
+        model.eval()
+
+        with torch.no_grad():
+            metrics = model(y_true, y_pred)
+        metrics = metrics.cpu().numpy()
+        metrics = np.sum(metrics) / len(metrics)
+        return metrics
+
+    def __normalized_mean_squared_error(self, y_true, y_pred) -> float:
         """Returns the normalized mean squared error of the two arrays.
         The normalized mean squared error is calculated as follows:
             normalized_mean_squared_error = (y_true - y_pred)^2 / (y_true - y_true.mean())^2
@@ -351,8 +400,77 @@ class Metrics:
         y_true, y_pred = np.array(y_true), np.array(y_pred)
         
         metrics = np.sum((y_true - y_pred) ** 2) / np.sum((y_true - y_true.mean()) ** 2)
-        metrics = 1 - metrics
         return metrics
+    
+    def weighted_score(self,
+                       wegiht_target_part: str,
+                       y_true: dict, true_video_height: int, true_video_width: int, true_cut_point: int,
+                       y_pred: dict, pred_video_height: int, pred_video_width: int) -> float:
+        wegiht_target_part = wegiht_target_part.upper()
+        weighted_y_true, weighted_y_pred = [], []
+
+        if wegiht_target_part == "SHOULDER":
+            for key in y_true.keys():
+                if key == "left_shoulder"   \
+                or key == "right_shoulder"  \
+                or key == "left_elbow"      \
+                or key == "right_elbow"     \
+                or key == "left_wrist"      \
+                or key == "right_wrist":
+                    weighted_y_true.extend(y_true[key] * 0.9)
+                    weighted_y_pred.extend(y_pred[key] * 0.9)
+                else:
+                    weighted_y_true.extend(y_true[key] * 0.1)
+                    weighted_y_pred.extend(y_pred[key] * 0.1)           
+
+        elif wegiht_target_part == "KNEE":
+            for key in y_true.keys():
+                if key == "left_knee"   \
+                or key == "right_knee"  \
+                or key == "left_hip"    \
+                or key == "right_hip"   \
+                or key == "left_ankle"  \
+                or key == "right_ankle":
+                    weighted_y_true.extend(y_true[key] * 0.9)
+                    weighted_y_pred.extend(y_pred[key] * 0.9)
+                else:
+                    weighted_y_true.extend(y_true[key] * 0.1)
+                    weighted_y_pred.extend(y_pred[key] * 0.1)
+
+        elif wegiht_target_part == "THIGHS":
+            for key in y_true.keys():
+                if key == "left_knee"   \
+                or key == "right_knee"  \
+                or key == "left_hip"    \
+                or key == "right_hip":
+                    weighted_y_true.extend(y_true[key] * 0.9)
+                    weighted_y_pred.extend(y_pred[key] * 0.9)
+                else:
+                    weighted_y_true.extend(y_true[key] * 0.1)
+                    weighted_y_pred.extend(y_pred[key] * 0.1)
+
+        elif wegiht_target_part == "ARMS":
+            for key in y_true.keys():
+                if key == "left_shoulder"   \
+                or key == "right_shoulder"  \
+                or key == "left_elbow"      \
+                or key == "right_elbow"     \
+                or key == "left_wrist"      \
+                or key == "right_wrist":
+                    weighted_y_true.extend(y_true[key] * 0.9)
+                    weighted_y_pred.extend(y_pred[key] * 0.9)
+                else:
+                    weighted_y_true.extend(y_true[key] * 0.1)
+                    weighted_y_pred.extend(y_pred[key] * 0.1)
+
+        else:
+            raise ValueError(f"Invalid target part: {wegiht_target_part}")
+
+        minimum_length = min(len(weighted_y_true), len(weighted_y_pred))
+        weighted_y_true, weighted_y_pred = weighted_y_true[:minimum_length], weighted_y_pred[:minimum_length]
+
+        metrics_score = self.__jaccard_score(weighted_y_true, weighted_y_pred)
+        return metrics_score
 
     def score(self, 
               y_true: dict, true_video_height: int, true_video_width: int, true_cut_point: int,
@@ -371,19 +489,21 @@ class Metrics:
 
         Returns:
             float: The score of the two arrays.""" 
-        _true = self.__video_normalize(y_true, true_video_height, true_video_width, true_cut_point)
-        y_pred = self.__video_normalize(y_pred, pred_video_height, pred_video_width, true_cut_point)
+        
+        # y_true = self.__video_normalize(y_true, true_video_height, true_video_width, true_cut_point)
+        # y_pred = self.__video_normalize(y_pred, pred_video_height, pred_video_width, true_cut_point)
 
-        each_scores =[]
-        for key in y_pred.keys():
-            print(f"[INFO/METRICS] Key: {key}")
-            y_true_value = y_true[key]
-            y_pred_value = y_pred[key]
+        y_true_values, y_pred_values = [], []
+        for key in y_true.keys():
+            y_true_value, y_pred_value = y_true[key], y_pred[key]
+            y_true_values.extend(y_true_value)
+            y_pred_values.extend(y_pred_value)
+        y_true_values, y_pred_values = torch.Tensor(y_true_values), torch.Tensor(y_pred_values)
+        y_true_values, y_pred_values = y_true_values.view(-1, 34), y_pred_values.view(-1, 34)
 
-            score = self.__jaccard_score(y_true_value, y_pred_value)
-            # score = self.__normalized_mean_squared_error(y_true_value, y_pred_value)
-            each_scores.append(score)
+        minmum_length = min(y_true_values.shape[0], y_pred_values.shape[0])
+        y_true_values, y_pred_values = y_true_values[:minmum_length, :], y_pred_values[:minmum_length, :]
 
-        score = np.mean(each_scores)
+        metrics_score = self.__linear_model(y_true_values, y_pred_values)
 
-        return score
+        return metrics_score

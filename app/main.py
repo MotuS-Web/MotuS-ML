@@ -1,15 +1,12 @@
-from .models import SkeletonExtractor, DataPreprocessing, Metrics
+from models import SkeletonExtractor, DataPreprocessing, Metrics
 
-from .connector import database_connector, database_query
+from connector import database_connector, database_query
 from fastapi import FastAPI, File, UploadFile, Form
-
-from typing import Annotated
 
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import PlainTextResponse
-from fastapi.exceptions import *
+from fastapi.exceptions import RequestValidationError
 
-import skvideo.io as skvideo
 import requests
 import logging
 import json
@@ -39,10 +36,6 @@ app.add_middleware(
 async def validation_exception_handler(request, exc):
     return PlainTextResponse(str(exc), status_code=400)
 
-@app.exception_handler(StarletteHTTPException)
-async def http_exception_handler(request, exc):
-    return PlainTextResponse(str(exc.detail), status_code=exc.status_code)
-
 @app.exception_handler(Exception)
 async def generic_exception_handler(request, exc):
     return PlainTextResponse(str(exc), status_code=500)
@@ -65,10 +58,11 @@ async def registerVideo(
     print(f"[INFO/REGISTER] Extractor threshold: {EXTRACTOR_THRESHOLD}")
 
     video_tensor, video_heigth, video_width = preprocessor.processing(video_file=video_file, temp_video_file_path=DUMMY_VIDEO_FILE_NAME)
-    skeletons, video_length = extractor.extract(video_tensor=video_tensor, score_threshold=EXTRACTOR_THRESHOLD, video_length=None)
+    skeletons, cropped_skeletons, video_length = extractor.extract(video_tensor=video_tensor, score_threshold=EXTRACTOR_THRESHOLD, video_length=None)
 
     extracted_skeleton_json = {
         "skeletons": skeletons,
+        "cropped_skeletons": cropped_skeletons,
         "video_length": video_length,
         "video_heigth": video_heigth,
         "video_width": video_width
@@ -81,7 +75,8 @@ async def registerVideo(
 
 @app.post("/getMetricsConsumer")
 async def getMetricsConsumer(
-    vno: int = Form(), video_file: UploadFile = File(...)
+    vno: int = Form(), 
+    video_file: UploadFile = File(...)
 ):
     """On this function, we will calculate the metrics between the consumer's skeleton and the guide's skeleton.
     Guide's skeleton is the skeleton that is extracted from the video that the consumer wants to follow. And the consumer's skeleton is the skeleton that is extracted from the consumer's video.
@@ -93,7 +88,7 @@ async def getMetricsConsumer(
 
     Returns:
         float or dobuble: The metrics between the consumer's skeleton and the guide's skeleton."""
-    testing_flag = False
+    testing_flag = False 
     print(f"[INFO/GETMETRICS] Video get metrics request has been received.")
     print(f"[INFO/GETMETRICS] VNO: {vno}")
     
@@ -107,17 +102,17 @@ async def getMetricsConsumer(
         print(f"[INFO/GETMETRICS] Database query: {query}")
         print(f"[INFO/GETMETRICS] Database result: {result}")
 
-        # if result.shape[0] == 0:    return {"error": "No query found in database."}
+        if result.shape[0] == 0:    return {"error": "No query found in database."}
 
         # Check if the video number is in the database. 
-        vno_list = result[:, 0].tolist() 
+        vno_list = result[:, 0].to_list()
+        if not vno in vno_list:     return {"error": "No video number found in database."}
         vno = vno_list.index(vno)
 
-        json_url = result[vno, 6]
-        print(f"[INFO/GETMETRICS] JSON URL: {json_url}")
-
+        json_url = result[vno, 7]
+        print(json_url)
         response = requests.get(json_url)
-        guide_skeleton = json.loads(response.text)['skeletons']
+        guide_skeleton = json.loads(response.text)
 
         # Below code will be also used in the database query.
         # JSON URL is the 8th column of the table. VNO is the user selected video number.
@@ -126,40 +121,41 @@ async def getMetricsConsumer(
 
         guide_video_height = json.loads(response.text)['video_heigth']
         guide_video_width = json.loads(response.text)['video_width']
-        video_cut_point = json.loads(response.text)['video_length']
+        video_cut_point = result[vno, 5]
+
+        video_target = result[vno, 3]
     
     else:
         with open("extracted_skeleton.json", "r") as f:
             guide_skeleton = json.load(f)
         guide_video_width, guide_video_height = guide_skeleton['video_width'], guide_skeleton['video_heigth']
         video_lenght = guide_skeleton['video_length']
-        guide_skeleton = guide_skeleton['skeletons']
+        video_target = "SHOULDER"
 
         video_tensor, video_height, video_width = preprocessor.processing(video_file, temp_video_file_path=DUMMY_VIDEO_FILE_NAME)
         video_cut_point = video_lenght
 
     print(f"[INFO/GETMETRICS] Testing flag: {testing_flag}")
 
-    skeletons, frame_count = extractor.extract(video_tensor=video_tensor, score_threshold=EXTRACTOR_THRESHOLD, video_length=video_cut_point)
+    print(video_cut_point)
+    _, skeletons, frame_count = extractor.extract(video_tensor=video_tensor, score_threshold=EXTRACTOR_THRESHOLD, video_length=video_cut_point)
 
     # Check if the video cut point is in the database.
     if video_cut_point >= frame_count:  video_cut_point = frame_count
     logging.info(f"[INFO/GETMETRICS] Video cut point: {video_cut_point}")
-    
-    print(f"[INFO/GETMETRICS] y_true skeletons keys: {guide_skeleton.keys()}")
-    print(f"[INFO/GETMETRICS] y_pred skeletons keys: {skeletons.keys()}")
+
+    print(guide_skeleton.keys())
 
     # Calculate metrics 
     score = metrics.score(
-        y_true=guide_skeleton,
+        y_true=guide_skeleton['skeletons'],
         true_video_height=guide_video_height,
         true_video_width=guide_video_width,
         true_cut_point=video_cut_point,
         y_pred=skeletons,
         pred_video_height=video_height,
-        pred_video_width=video_width
+        pred_video_width=video_width,
     )
-
     logging.info(f"[INFO/GETMETRICS] Score Metrics: {score}")
 
     return {"metrics": score}
