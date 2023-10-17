@@ -1,4 +1,6 @@
-import mysql.connector as db
+from typing import Any
+
+import mariadb as db
 import polars as pl
 import logging
 import json 
@@ -27,7 +29,7 @@ def database_connector(database_secret_path: str = "database_secret.json") -> tu
 
     return connector, cursor
 
-def database_query(connector: db.MySQLConnection, cursor: db.cursor.MySQLCursor, query: str, verbose: bool = False) -> pl.DataFrame:
+def database_query(connector: Any, cursor: Any, query: str, verbose: bool = False) -> pl.DataFrame:
     """Query the database and return the result as a polars dataframe.
     Before using this function, you should connect to the database using database_connector function.
     Connector function will return the connector and the cursor. You should pass the connector and the cursor to this function.
@@ -93,8 +95,8 @@ def database_select_using_pk(
     return result
 
 def insert_summary_database(
-        connector: db.MySQLConnection = None, 
-        cursor: db.MySQLConnection.cursor = None, 
+        connector: Any = None, 
+        cursor: Any = None, 
         target_table_name: str = None,
         target_database: str = None,
         target_columns: str = None,
