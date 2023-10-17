@@ -490,8 +490,8 @@ class Metrics:
         Returns:
             float: The score of the two arrays.""" 
         
-        # y_true = self.__video_normalize(y_true, true_video_height, true_video_width, true_cut_point)
-        # y_pred = self.__video_normalize(y_pred, pred_video_height, pred_video_width, true_cut_point)
+        y_true = self.__video_normalize(y_true, true_video_height, true_video_width, true_cut_point)
+        y_pred = self.__video_normalize(y_pred, pred_video_height, pred_video_width, true_cut_point)
 
         y_true_values, y_pred_values = [], []
         for key in y_true.keys():

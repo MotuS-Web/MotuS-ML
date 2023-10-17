@@ -4,6 +4,8 @@ examples/
 *.webm
 
 secret_key.json
+dummy.mp4
+extracted_skeleton.json
 
 experiements/
 
