@@ -1,7 +1,6 @@
 from tqdm import tqdm
 
 import torchvision.models as models
-import skvideo.io as skvideo
 import numpy as np
 import time
 import cv2
@@ -11,8 +10,6 @@ import torch
 
 import logging
 import utils
-
-from sklearn.metrics import jaccard_score
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 
