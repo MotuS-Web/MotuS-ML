@@ -9,9 +9,12 @@ import cv2
 import torch.nn as nn
 import torch
 
+import logging
 import utils
 
 from sklearn.metrics import jaccard_score
+
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 
 class SkeletonExtractor:
     def __init__(
@@ -353,7 +356,8 @@ class Metrics:
         return skeleton
 
     def __jaccard_score(self, 
-                        y_true, y_pred) -> float:
+                        y_true, 
+                        y_pred) -> float:
         """Returns the jaccard score of the two arrays.
         The jaccard score is calculated as follows:
             jaccard_score = (y_true & y_pred).sum() / (y_true | y_pred).sum()
@@ -366,6 +370,25 @@ class Metrics:
             float: The jaccard score of the two arrays."""
         y_true, y_pred = np.array(y_true), np.array(y_pred)        
         metrics = np.sum(np.min([y_true, y_pred], axis=0)) / np.sum(np.max([y_true, y_pred], axis=0))
+        metrics = float(metrics)
+
+        return metrics
+
+    def __cosine_score(self,
+                       y_true: torch.Tensor,
+                       y_pred: torch.Tensor) -> float:
+        """Returns the cosine score of the two arrays.
+        The cosine score is calculated as follows:
+            cosine_score = (y_true * y_pred).sum() / (y_true * y_true).sum()
+
+        Args:
+            y_true (np.ndarray): The ground truth array.
+            y_pred (np.ndarray): The predicted array.
+
+        Returns:
+            float: The cosine score of the two arrays."""
+        y_true, y_pred = np.array(y_true), np.array(y_pred)
+        metrics = np.sum(y_true * y_pred) / np.sum(y_true * y_true)
         metrics = float(metrics)
 
         return metrics
@@ -386,92 +409,108 @@ class Metrics:
         metrics = np.sum(metrics) / len(metrics)
         return metrics
 
-    def __normalized_mean_squared_error(self, y_true, y_pred) -> float:
-        """Returns the normalized mean squared error of the two arrays.
-        The normalized mean squared error is calculated as follows:
-            normalized_mean_squared_error = (y_true - y_pred)^2 / (y_true - y_true.mean())^2
+    def __norm_sigmoid(self, 
+                       score: float, 
+                       k: float = 0.074,
+                       t: float = 0.556) -> float:
+        score = 1 / (1 + np.exp(
+            -((score - 0.5) / k)
+        ))
+        score = score.item()
+        return score
 
-        Args:
-            y_true (np.ndarray): The ground truth array.
-            y_pred (np.ndarray): The predicted array.
-
-        Returns:
-            float: The normalized mean squared error of the two arrays."""
-        y_true, y_pred = np.array(y_true), np.array(y_pred)
-        
-        metrics = np.sum((y_true - y_pred) ** 2) / np.sum((y_true - y_true.mean()) ** 2)
-        return metrics
-    
     def weighted_score(self,
                        wegiht_target_part: str,
                        y_true: dict, true_video_height: int, true_video_width: int, true_cut_point: int,
                        y_pred: dict, pred_video_height: int, pred_video_width: int) -> float:
+        def __get_weight(skeletons: list, weight_value: float):
+            coordinates = []
+            for idx in range(len(skeletons)):
+                x, y = skeletons[idx]
+                x = x * weight_value
+                y = y * weight_value
+                coordinates.append((x, y))
+            return coordinates 
+
         wegiht_target_part = wegiht_target_part.upper()
         weighted_y_true, weighted_y_pred = [], []
 
         if wegiht_target_part == "SHOULDER":
             for key in y_true.keys():
                 if key == "left_shoulder"   \
-                or key == "right_shoulder"  \
-                or key == "left_elbow"      \
-                or key == "right_elbow"     \
-                or key == "left_wrist"      \
-                or key == "right_wrist":
-                    weighted_y_true.extend(y_true[key] * 0.9)
-                    weighted_y_pred.extend(y_pred[key] * 0.9)
+                or key == "right_shoulder":
+                    weighted_y_true.append(__get_weight(y_true[key], 1.0))
+                    weighted_y_pred.append(__get_weight(y_pred[key], 1.0))
+                
+                elif key == "left_elbow"    \
+                or key == "right_elbow":
+                    weighted_y_true.append(__get_weight(y_true[key], 0.5))
+                    weighted_y_pred.append(__get_weight(y_pred[key], 0.5))
+                   
                 else:
-                    weighted_y_true.extend(y_true[key] * 0.1)
-                    weighted_y_pred.extend(y_pred[key] * 0.1)           
+                    weighted_y_true.append(__get_weight(y_true[key], 0.01))
+                    weighted_y_pred.append(__get_weight(y_pred[key], 0.01))
 
         elif wegiht_target_part == "KNEE":
             for key in y_true.keys():
                 if key == "left_knee"   \
-                or key == "right_knee"  \
-                or key == "left_hip"    \
-                or key == "right_hip"   \
-                or key == "left_ankle"  \
-                or key == "right_ankle":
-                    weighted_y_true.extend(y_true[key] * 0.9)
-                    weighted_y_pred.extend(y_pred[key] * 0.9)
-                else:
-                    weighted_y_true.extend(y_true[key] * 0.1)
-                    weighted_y_pred.extend(y_pred[key] * 0.1)
+                or key == "right_knee":
+                    weighted_y_true.append(__get_weight(y_true[key], 1.0))
+                    weighted_y_pred.append(__get_weight(y_pred[key], 1.0))                    
 
-        elif wegiht_target_part == "THIGHS":
-            for key in y_true.keys():
-                if key == "left_knee"   \
-                or key == "right_knee"  \
-                or key == "left_hip"    \
+                if key == "left_hip"    \
                 or key == "right_hip":
-                    weighted_y_true.extend(y_true[key] * 0.9)
-                    weighted_y_pred.extend(y_pred[key] * 0.9)
-                else:
-                    weighted_y_true.extend(y_true[key] * 0.1)
-                    weighted_y_pred.extend(y_pred[key] * 0.1)
+                    weighted_y_true.append(__get_weight(y_true[key], 0.45))
+                    weighted_y_pred.append(__get_weight(y_pred[key], 0.45))                    
 
-        elif wegiht_target_part == "ARMS":
+                else:
+                    weighted_y_true.append(__get_weight(y_true[key], 0.01))
+                    weighted_y_pred.append(__get_weight(y_pred[key], 0.01))
+
+        elif wegiht_target_part == "THIGH":
+            for key in y_true.keys():
+                if key == "left_hip"    \
+                or key == "right_hip":
+                    weighted_y_true.append(__get_weight(y_true[key], 1.0))
+                    weighted_y_pred.append(__get_weight(y_pred[key], 1.0))
+                
+                elif key == "left_knee"   \
+                or key == "right_knee":
+                    weighted_y_true.append(__get_weight(y_true[key], 0.3))
+                    weighted_y_pred.append(__get_weight(y_pred[key], 0.3))
+               
+                else:
+                    weighted_y_true.append(__get_weight(y_true[key], 0.01))
+                    weighted_y_pred.append(__get_weight(y_pred[key], 0.01))
+
+        elif wegiht_target_part == "ARM":
             for key in y_true.keys():
                 if key == "left_shoulder"   \
                 or key == "right_shoulder"  \
                 or key == "left_elbow"      \
-                or key == "right_elbow"     \
-                or key == "left_wrist"      \
-                or key == "right_wrist":
-                    weighted_y_true.extend(y_true[key] * 0.9)
-                    weighted_y_pred.extend(y_pred[key] * 0.9)
+                or key == "right_elbow":
+                    weighted_y_true.append(__get_weight(y_true[key], 0.85))
+                    weighted_y_pred.append(__get_weight(y_pred[key], 0.85))
+
                 else:
-                    weighted_y_true.extend(y_true[key] * 0.1)
-                    weighted_y_pred.extend(y_pred[key] * 0.1)
+                    weighted_y_true.append(__get_weight(y_true[key], 0.01))
+                    weighted_y_pred.append(__get_weight(y_pred[key], 0.01))
 
         else:
             raise ValueError(f"Invalid target part: {wegiht_target_part}")
 
+        weighted_y_pred, weighted_y_true = np.array(weighted_y_pred), np.array(weighted_y_true)
+        weighted_y_pred, weighted_y_true = weighted_y_pred.reshape(-1, 34), weighted_y_true.reshape(-1, 34)
+
         minimum_length = min(len(weighted_y_true), len(weighted_y_pred))
-        weighted_y_true, weighted_y_pred = weighted_y_true[:minimum_length], weighted_y_pred[:minimum_length]
+        weighted_y_true, weighted_y_pred = weighted_y_true[:minimum_length, :], weighted_y_pred[:minimum_length, :]
+        weighted_y_true, weighted_y_pred = weighted_y_true.reshape(-1, 17, 2), weighted_y_pred.reshape(-1, 17, 2)
+        logging.info(f"[INFO/SCORE] Weighted Y true values shape: {len(weighted_y_true)}")
+        logging.info(f"[INFO/SCORE] Weighted Y pred values shape: {len(weighted_y_pred)}")
 
         metrics_score = self.__jaccard_score(weighted_y_true, weighted_y_pred)
         return metrics_score
-
+    
     def score(self, 
               y_true: dict, true_video_height: int, true_video_width: int, true_cut_point: int,
               y_pred: dict, pred_video_height: int, pred_video_width: int) -> float:
@@ -488,11 +527,10 @@ class Metrics:
             pred_video_width (int): The width of the video that the predicted array is extracted from.
 
         Returns:
-            float: The score of the two arrays.""" 
-        
+            float: The score of the two arrays."""
         y_true = self.__video_normalize(y_true, true_video_height, true_video_width, true_cut_point)
         y_pred = self.__video_normalize(y_pred, pred_video_height, pred_video_width, true_cut_point)
-
+        
         y_true_values, y_pred_values = [], []
         for key in y_true.keys():
             y_true_value, y_pred_value = y_true[key], y_pred[key]
@@ -503,7 +541,20 @@ class Metrics:
 
         minmum_length = min(y_true_values.shape[0], y_pred_values.shape[0])
         y_true_values, y_pred_values = y_true_values[:minmum_length, :], y_pred_values[:minmum_length, :]
+        y_true_values, y_pred_values = y_true_values.numpy().reshape(-1, 17, 2), y_pred_values.numpy().reshape(-1, 17, 2)
 
-        metrics_score = self.__linear_model(y_true_values, y_pred_values)
+        logging.info(f"[INFO/SCORE] Y true values shape: {y_true_values.shape}")
+        logging.info(f"[INFO/SCORE] Y pred values shape: {y_pred_values.shape}")
+
+        jaccard_metrics = self.__jaccard_score(y_true_values, y_pred_values)
+        cosine_score = self.__cosine_score(y_true_values, y_pred_values)
+
+        metrics_score = self.__norm_sigmoid(
+            score=jaccard_metrics
+        )
+
+        logging.info(f"[INFO/SCORE] Metrics score: {metrics_score}")
+        logging.info(f"[INFO/SCORE] Jaccard score: {jaccard_metrics}")
+        logging.info(f"[INFO/SCORE] Cosine score: {cosine_score}")
 
         return metrics_score
