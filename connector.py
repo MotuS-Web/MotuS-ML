@@ -1,6 +1,7 @@
 from typing import Any
 
-import mariadb as db
+# import mariadb as db
+import mysql.connector as db
 import polars as pl
 import logging
 import json 

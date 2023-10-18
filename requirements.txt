@@ -4,13 +4,14 @@ python-multipart
 
 polars
 numpy
-mysql-connector-python
+mariadb
 scikit-video
 scikit-learn
 
 torch
 torchvision
 opencv-python
+mariadb
 
 matplotlib
 tqdm
