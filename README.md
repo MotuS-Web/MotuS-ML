@@ -1,3 +1,11 @@
+<div align="center">
+
+  <img src="https://github.com/MotuS-Web/MotuS-Backend/assets/80760160/dea1f252-ec63-410f-8516-fc4adcfd1393" alt="motus_logo" width="300" height="300">
+
+MotuS Artifical Intelligence, for measuring your move.
+
+</div>
+
 # ReHab Machine Learning - Pose Estimation
 
 This repository is the artificial intelligence repository for the ReHab project. Artificial intelligence is a crucial element in the project, as it provides essential services and methods for guiding users in performing exercises. Through artificial intelligence, we offer guidance videos and provide users with a way to perform exercises. We evaluate how well the user is doing by measuring similarity through feature extraction and cosine similarity using the videos provided by the user.
@@ -5,6 +13,11 @@ This repository is the artificial intelligence repository for the ReHab project.
 We utilize pre-trained models for our system. The baseline model employs Posenet, and this choice might change based on considerations such as the trade-off between communication overhead and computation overhead.
 
 ## Requirements
+
+우리는 2가지 기능을 제공하고 있습니다. 1번째는 아래와 같이 코드를 직접 실행하는 방법과 Docker Image를 받아서 Docker를 통한 실행 방법을 제공하고 있습니다. 아래 원하는 설치 방식에 대한 문서를 읽어보고 진행하시기 바랍니다.
+
+- ![Docker Guide](./docs/DOCKER.md)
+- ![Uvicorn Guide](./docs/UNVICORN.md)
 
 This code requires a set of essential modules to build an API server using FastAPI, run artificial intelligence processes with torch and torchvision, access databases using mysql_connector, transform and utilize uploaded videos using scikit-video, numpy, and openCV. It also utilizes the request and json modules for fetching files from Naver Cloud Object. Additionally, internal utility modules and methods exist, so `main.py` necessitates `utils.py`, `models.py`, and `connector.py`.
 
@@ -20,32 +33,6 @@ The summarized requirements are as follows:
 - mysql.connector (>= 8.1.0)
 
 Please note that the `requirements.txt` hasn't been separately written due to the numerous modules used for personal experimentation and development within the current environment. Your understanding is appreciated.
-
-## Quick Start
-
-To set up the FastAPI server, it's essential to install [Uvicorn](https://www.uvicorn.org/) first. After installation, you can run the server using the following command in the directory containing `main.py`:
-
-```bash
-$ uvicorn main:app --host 127.0.0.1 --port 8080
-INFO:     Started server process [60991]
-INFO:     Waiting for application startup.
-INFO:     Application startup complete.
-INFO:     Uvicorn running on http://127.0.0.1:8080 (Press CTRL+C to quit)
-```
-
-If you plan on making modifications and building the API server iteratively, you can use the following command:
-
-```bash
-$ uvicorn main:app --host 127.0.0.1 --port 8080 --reload
-INFO:     Will watch for changes in these directories: ['path/to/ReHab-ML']
-INFO:     Uvicorn running on http://127.0.0.1:8080 (Press CTRL+C to quit)
-INFO:     Started reloader process [61155] using StatReload
-INFO:     Started server process [61157]
-INFO:     Waiting for application startup.
-INFO:     Application startup complete.
-```
-
-The `--reload` parameter automatically restarts the server whenever there's a change in the internal code and it's saved. However, if the server is in the process of preparing a response after a request, it might restart after responding, so keep that in mind.
 
 ## Our Model
 
