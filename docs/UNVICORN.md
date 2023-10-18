@@ -40,27 +40,24 @@ The `secret_key.json` file should be written in the above format and should be l
 Additionally, for security reasons, this repository does not provide the `secret_key.json` file, so you need to configure it yourself.
 
 ## Device Setting
-
-디바이스 세팅은 당신이 CUDA (Compute Unified Device Architecture), MPS (Metal Performance Shaders) 그리고 CPU 중에 원하는 Device를 선택하고 진행하시기 바랍니다. 본 코드는 기본적으로는 CPU로 세팅되어 있음을 알립니다.
+Device configuration allows you to select your desired device from CUDA (Compute Unified Device Architecture), MPS (Metal Performance Shaders), or CPU. Please note that the code is set to use the CPU by default.
 
 ```python
 # main.py
 
 app = FastAPI()
-extractor = SkeletonExtractor(pretrained_bool=True, number_of_keypoints=17, device='cuda')
-preprocessor = DataPreprocessing()
+extractor = SkeletonExtractor(pretrained_bool=True, number_of keypoints=17, device='cuda')
+preprocessor = Data Preprocessing()
 metrics = Metrics()
 ```
 
-CPU가 아닌 CUDA, MPS 등으로 변경을 원한다면 `SkeletonExtractor` 객체의 Argument인 device를 `cuda`, `cpu`, `mps` 중 하나를 선택하시면 됩니다. `cuda`를 원하시는 경우에는 **반드시 Device에 CUDA설정이 되어 있어야합니다.** 자세한 내용은 ![Nvidia CUDA 공식 Document](https://docs.nvidia.com/cuda/) 참고하시기 바랍니다. cpu는 기본적으로 pytorch가 설치가 된다면 진행할 수 있습니다. 
+If you want to change from CPU to CUDA, MPS, or another device, you can choose one of `cuda`, `cpu`, or `mps` as the `device` argument in the `SkeletonExtractor` object. If you want to use `cuda`, **you must have CUDA configured on your device**. For more details, please refer to the [Nvidia CUDA official documentation](https://docs.nvidia.com/cuda/). Using CPU is possible by default as long as PyTorch is installed.
 
-다만, `mps` 같은 경우에는 Apple의 노트북 시리즈 중 ARM 아키텍쳐 기반으로 탑재된 디바이스가 있습니다. 이와 같은 경우에는 [Quick Start](#quick-start) 전에 미리 아래와 같이 환경변수를 변경해야합니다.
+However, for devices like `mps`, there are devices based on ARM architecture, such as Apple's laptop series. In such cases, you need to modify environment variables as follows before proceeding with the [Quick Start](#quick-start):
 
 ```bash
 export PYTORCH_ENABLE_MPS_FALLBACK=1
 ```
-
-이유는 NMS을 Skeleton 모델에서 사용하는데, 안타깝게도 현재 NMS 부분은 MPS로 실행할 수 없다고 합니다. 자세한 내용은 [공식 Issue](https://github.com/pytorch/pytorch/issues/77764)를 한번 확인하시기 바랍니다. 
 
 ## Quick Start
 

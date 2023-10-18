@@ -40,6 +40,10 @@ async def validation_exception_handler(request, exc):
 async def generic_exception_handler(request, exc):
     return PlainTextResponse(str(exc), status_code=500)
 
+@app.get("/")
+async def root():
+    return {"message": "Root of the API. Success!"}
+
 @app.post("/videoRegister")
 async def registerVideo(
     video_file: UploadFile = File(...)
@@ -123,14 +127,14 @@ async def getMetricsConsumer(
         guide_video_width = json.loads(response.text)['video_width']
         video_cut_point = result[vno, 5]
 
-        video_target = result[vno, 3]
+        weight_target = result[vno, 3]
     
     else:
         with open("extracted_skeleton.json", "r") as f:
             guide_skeleton = json.load(f)
         guide_video_width, guide_video_height = guide_skeleton['video_width'], guide_skeleton['video_heigth']
         video_lenght = guide_skeleton['video_length']
-        video_target = "SHOULDER"
+        weight_target = "SHOULDER"
 
         video_tensor, video_height, video_width = preprocessor.processing(video_file, temp_video_file_path=DUMMY_VIDEO_FILE_NAME)
         video_cut_point = video_lenght
@@ -144,11 +148,8 @@ async def getMetricsConsumer(
     if video_cut_point >= frame_count:  video_cut_point = frame_count
     logging.info(f"[INFO/GETMETRICS] Video cut point: {video_cut_point}")
 
-    print(guide_skeleton.keys())
-
-    # Calculate metrics 
     score = metrics.score(
-        y_true=guide_skeleton['skeletons'],
+        y_true=guide_skeleton['cropped_skeletons'],
         true_video_height=guide_video_height,
         true_video_width=guide_video_width,
         true_cut_point=video_cut_point,
@@ -156,6 +157,7 @@ async def getMetricsConsumer(
         pred_video_height=video_height,
         pred_video_width=video_width,
     )
+
     logging.info(f"[INFO/GETMETRICS] Score Metrics: {score}")
 
     return {"metrics": score}
