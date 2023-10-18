@@ -1,6 +1,6 @@
 # Uvicorn Guide
 
-This document contains the process of implementing Python, FastAPI, Uvicorn, Pytorch, etc., directly, without using Docker. For installation using Docker, please refer to the ![Docker Guide](./DOCKER.md).
+This document contains the process of implementing Python, FastAPI, Uvicorn, Pytorch, etc., directly, without using Docker. For installation using Docker, please refer to the [Docker Guide](./DOCKER.md).
 
 ## Requirements.
 
@@ -18,6 +18,7 @@ The summarized requirements are as follows:
 - mariadb (>=)
 
 Please note that the `requirements.txt` hasn't been separately written due to the numerous modules used for personal experimentation and development within the current environment. Your understanding is appreciated.
+
 ## Secret Key
 
 We perform the task of accessing the database to compare guide videos and user videos. To perform this task, the `secret_key.json` file is required. The `secret_key.json` file should be structured as follows:
@@ -59,6 +60,7 @@ CPU가 아닌 CUDA, MPS 등으로 변경을 원한다면 `SkeletonExtractor` 객
 export PYTORCH_ENABLE_MPS_FALLBACK=1
 ```
 
+이유는 NMS을 Skeleton 모델에서 사용하는데, 안타깝게도 현재 NMS 부분은 MPS로 실행할 수 없다고 합니다. 자세한 내용은 [공식 Issue](https://github.com/pytorch/pytorch/issues/77764)를 한번 확인하시기 바랍니다. 
 
 ## Quick Start
 

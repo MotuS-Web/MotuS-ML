@@ -14,10 +14,10 @@ We utilize pre-trained models for our system. The baseline model employs Posenet
 
 ## Requirements
 
-우리는 2가지 기능을 제공하고 있습니다. 1번째는 아래와 같이 코드를 직접 실행하는 방법과 Docker Image를 받아서 Docker를 통한 실행 방법을 제공하고 있습니다. 아래 원하는 설치 방식에 대한 문서를 읽어보고 진행하시기 바랍니다.
+We provide two installation methods. The first method is to run the code directly, as described in the document. The second method is to obtain the Docker image and run it through Docker. Please read the documentation for the installation method you prefer and proceed accordingly.
 
-- ![Docker Guide](./docs/DOCKER.md)
-- ![Uvicorn Guide](./docs/UNVICORN.md)
+- [Docker Guide](./docs/DOCKER.md)
+- [Uvicorn Guide](./docs/UNVICORN.md)
 
 This code requires a set of essential modules to build an API server using FastAPI, run artificial intelligence processes with torch and torchvision, access databases using mysql_connector, transform and utilize uploaded videos using scikit-video, numpy, and openCV. It also utilizes the request and json modules for fetching files from Naver Cloud Object. Additionally, internal utility modules and methods exist, so `main.py` necessitates `utils.py`, `models.py`, and `connector.py`.
 
