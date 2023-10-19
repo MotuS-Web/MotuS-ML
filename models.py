@@ -156,7 +156,7 @@ class SkeletonExtractor:
             total_fps += fps
             frame_count += 1
 
-            pbar.set_postfix({"FPS": f"{fps:.2f}", "Average FPS": f"{total_fps / frame_count:.2f}"})
+            pbar.set_postfix({"FPS": f"{fps:.2f}", "Average FPS": f"{total_fps / frame_count:.2f}, Skeleton shapes: {len(extracted_skeletons)}"})
             pbar.update(1)
 
         pbar.close()
