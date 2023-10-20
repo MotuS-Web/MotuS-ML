@@ -1,27 +1,36 @@
 from models import SkeletonExtractor, DataPreprocessing, Metrics
 
+from fastapi import FastAPI, File, UploadFile, Form, Request
 from connector import database_connector, database_query
-from fastapi import FastAPI, File, UploadFile, Form
 
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import PlainTextResponse
+from fastapi.responses import PlainTextResponse, JSONResponse
 from fastapi.exceptions import RequestValidationError
+
+from fastapi.middleware.httpsredirect import HTTPSRedirectMiddleware
+from fastapi.middleware.cors import CORSMiddleware 
 
 import requests
 import logging
+import asyncio
 import json
+import time
 import os
 
+REQUEST_TIMEOUT_ERROR = 100000000000
 DUMMY_VIDEO_FILE_NAME = "dummy.webm"
 EXTRACTOR_THRESHOLD = 0.85
 
 app = FastAPI()
-extractor = SkeletonExtractor(pretrained_bool=True, number_of_keypoints=17, device='cuda')
+extractor = SkeletonExtractor(pretrained_bool=True, number_of_keypoints=17, device='cpu')
 preprocessor = DataPreprocessing()
 metrics = Metrics()
 
 os.system("export PYTORCH_ENABLE_MPS_FALLBACK=1")
 logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+
+app.add_middleware(
+    HTTPSRedirectMiddleware,
+)
 
 app.add_middleware(
     CORSMiddleware,
@@ -161,3 +170,12 @@ async def getMetricsConsumer(
     logging.info(f"[INFO/GETMETRICS] Score Metrics: {score}")
 
     return {"metrics": score}
+
+@app.middleware("http")
+async def timeout_middleware(request: Request, call_next):
+    try:
+        start_time = time.time()
+        return await asyncio.wait_for(call_next(request), timeout=REQUEST_TIMEOUT_ERROR)
+    except asyncio.TimeoutError:
+        process_time = time.time() - start_time
+        return JSONResponse({'detail': f'Request timed out after {process_time:.2f} seconds.'}, status_code=408)

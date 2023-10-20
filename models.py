@@ -1,7 +1,6 @@
 from tqdm import tqdm
 
 import torchvision.models as models
-import skvideo.io as skvideo
 import numpy as np
 import time
 import cv2
@@ -11,8 +10,6 @@ import torch
 
 import logging
 import utils
-
-from sklearn.metrics import jaccard_score
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 
@@ -123,8 +120,10 @@ class SkeletonExtractor:
         total_fps, frame_count = 0., 0.
         extracted_skeletons = self.__extract_keypoint_mapping({})
         extracted_skeletons_cropped = self.__extract_keypoint_mapping({})
-        pbar = tqdm(desc=f"Extracting skeletons from video", total=video_length, unit="frames")
+        
+        logging.info(f"[INFO/EXTRACT] Extracting skeletons from video.")
 
+        pbar = tqdm(desc=f"Extracting skeletons from video", total=video_length, unit="frames")
         while True:
             ret, frame = video_tensor.read()
             if not ret: break
@@ -159,7 +158,7 @@ class SkeletonExtractor:
             total_fps += fps
             frame_count += 1
 
-            pbar.set_postfix({"FPS": f"{fps:.2f}", "Average FPS": f"{total_fps / frame_count:.2f}"})
+            pbar.set_postfix({"FPS": f"{fps:.2f}", "Average FPS": f"{total_fps / frame_count:.2f}, Skeleton shapes: {len(extracted_skeletons)}"})
             pbar.update(1)
 
         pbar.close()
