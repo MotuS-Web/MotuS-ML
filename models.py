@@ -120,8 +120,10 @@ class SkeletonExtractor:
         total_fps, frame_count = 0., 0.
         extracted_skeletons = self.__extract_keypoint_mapping({})
         extracted_skeletons_cropped = self.__extract_keypoint_mapping({})
-        pbar = tqdm(desc=f"Extracting skeletons from video", total=video_length, unit="frames")
+        
+        logging.info(f"[INFO/EXTRACT] Extracting skeletons from video.")
 
+        pbar = tqdm(desc=f"Extracting skeletons from video", total=video_length, unit="frames")
         while True:
             ret, frame = video_tensor.read()
             if not ret: break
